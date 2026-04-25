@@ -1,4 +1,4 @@
-use crate::constants::should_include_file;
+use crate::constants::{should_include_file, REPO_BASE_URL};
 use crate::models::{FileNode, NodeType, WorktreeData};
 use std::collections::HashMap;
 
@@ -20,8 +20,8 @@ fn generate_download_url(repo: &str, path: &str) -> String {
         .collect();
     let encoded_path = parts.join("/");
     format!(
-        "https://gh.hoa.moe/github.com/HITSZ-OpenAuto/{}/raw/main/{}",
-        repo, encoded_path
+        "{}/{}/raw/main/{}",
+        REPO_BASE_URL, repo, encoded_path
     )
 }
 
@@ -292,7 +292,7 @@ mod tests {
         let url = generate_download_url("TEST101", "slides/lecture1.pdf");
         assert_eq!(
             url,
-            "https://gh.hoa.moe/github.com/HITSZ-OpenAuto/TEST101/raw/main/slides/lecture1.pdf"
+            format!("{}/TEST101/raw/main/slides/lecture1.pdf", REPO_BASE_URL)
         );
     }
 

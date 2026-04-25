@@ -23,8 +23,8 @@ pub struct GitHubFetcher {
 }
 
 impl GitHubFetcher {
-    /// Create a new GitHub fetcher with authentication token
-    pub fn new(token: String) -> Result<Self> {
+    /// Create a new GitHub fetcher with optional authentication token
+    pub fn new(token: Option<String>) -> Result<Self> {
         let mut headers = HeaderMap::new();
         headers.insert(USER_AGENT, HeaderValue::from_static("fuma-rs"));
         headers.insert(
@@ -32,13 +32,15 @@ impl GitHubFetcher {
             HeaderValue::from_static("application/vnd.github+json"),
         );
 
-        let auth_value = format!("Bearer {}", token);
-        headers.insert(
-            AUTHORIZATION,
-            HeaderValue::from_str(&auth_value).map_err(|e| {
-                FumaError::Io(std::io::Error::new(std::io::ErrorKind::InvalidInput, e))
-            })?,
-        );
+        if let Some(t) = token {
+            let auth_value = format!("Bearer {}", t);
+            headers.insert(
+                AUTHORIZATION,
+                HeaderValue::from_str(&auth_value).map_err(|e| {
+                    FumaError::Io(std::io::Error::new(std::io::ErrorKind::InvalidInput, e))
+                })?,
+            );
+        }
 
         let client = reqwest::Client::builder()
             .default_headers(headers)
@@ -145,7 +147,7 @@ impl GitHubFetcher {
 
 /// Fetch all repositories concurrently with semaphore limiting
 pub async fn fetch_all_repos(
-    token: String,
+    token: Option<String>,
     org: &str,
     repos_list: &[String],
     repos_dir: &Path,

@@ -27,9 +27,10 @@ use std::{env, fs};
 /// 6. Formats MDX files for Fumadocs compatibility
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Check for --fetch flag
+    // Check for --fetch and --allow-anonymous flags
     let args: Vec<String> = env::args().collect();
     let should_fetch = args.contains(&"--fetch".to_string());
+    let allow_anonymous = args.contains(&"--allow-anonymous".to_string());
 
     let repo_root = Path::new(".").to_path_buf();
 
@@ -42,12 +43,19 @@ async fn main() -> Result<()> {
         println!("\n=== Fetching repos from GitHub ===");
 
         let token = fetcher::resolve_github_token();
-        if token.is_none() {
+        if token.is_none() && !allow_anonymous {
             eprintln!("Error: No GitHub token found!");
-            eprintln!(
-                "Please set PERSONAL_ACCESS_TOKEN, GITHUB_TOKEN, or login via `gh auth login`"
-            );
+            eprintln!("Use --allow-anonymous to force unauthenticated requests (60 req/hr limit),");
+            eprintln!("or set PERSONAL_ACCESS_TOKEN / GITHUB_TOKEN environment variable.");
             std::process::exit(1);
+        }
+
+        let use_token = token.is_some();
+
+        if use_token {
+            println!("Using GitHub token for authenticated requests (5000 req/hr limit)");
+        } else {
+            eprintln!("Warning: Using unauthenticated requests (60 req/hr limit)");
         }
 
         // Load repos list
@@ -68,7 +76,7 @@ async fn main() -> Result<()> {
 
         // Fetch repos (20 concurrent requests)
         fetcher::fetch_all_repos(
-            token.unwrap(),
+            token,
             "HITSZ-OpenAuto",
             &repos_list,
             &repos_dir,

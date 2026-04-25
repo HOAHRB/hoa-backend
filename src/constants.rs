@@ -68,6 +68,9 @@ pub const EXCLUDED_EXTENSIONS: &[&str] = &[".toml"];
 /// Directory prefixes to exclude
 pub const EXCLUDED_PREFIXES: &[&str] = &[".github/"];
 
+/// Repository base URL for file downloads
+pub const REPO_BASE_URL: &str = "https://gh.hoa.moe/github.com/HITSZ-OpenAuto";
+
 /// Check if a file path should be included in the file tree
 pub fn should_include_file(path: &str) -> bool {
     let filename = path.split('/').next_back().unwrap_or("");
