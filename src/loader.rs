@@ -267,31 +267,27 @@ pub fn load_shared_categories(data_dir: &Path) -> SharedCategoriesConfig {
     }
 }
 
-/// Load repos_list.txt to filter available courses.
-///
-/// # Returns
-/// * Empty HashSet if repos_list.txt doesn't exist (process all courses)
-/// * HashSet of repository codes if the file exists
-pub fn load_repos_list(repo_root: &Path) -> Result<HashSet<String>> {
-    let path = repo_root.join("repos_list.txt");
-
-    if !path.exists() {
-        eprintln!("Warning: repos_list.txt not found, will process all available courses");
-        return Ok(HashSet::new());
+/// Load repository IDs from local course MDX files.
+pub fn load_local_repo_ids(repos_dir: &Path) -> Result<HashSet<String>> {
+    if !repos_dir.exists() {
+        return Err(FumaError::MissingDirectory(repos_dir.to_path_buf()));
     }
 
-    let content = fs::read_to_string(&path)?;
-    Ok(content
-        .lines()
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-        .collect())
+    let mut repo_ids = HashSet::new();
+    for entry in fs::read_dir(repos_dir)? {
+        let path = entry?.path();
+        if path.extension().is_some_and(|extension| extension == "mdx") {
+            if let Some(stem) = path.file_stem().and_then(|stem| stem.to_str()) {
+                repo_ids.insert(stem.to_string());
+            }
+        }
+    }
+    Ok(repo_ids)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Write;
 
     fn create_test_grade_detail(name: &str, percent: &str) -> GradeDetail {
         GradeDetail {
@@ -476,40 +472,30 @@ mod tests {
     }
 
     #[test]
-    fn test_load_repos_list_nonexistent() {
-        use std::env;
-        let temp_dir = env::temp_dir().join("test_repos_list_nonexistent");
-        let _ = std::fs::create_dir_all(&temp_dir);
+    fn loads_local_repo_ids_from_mdx_files_only() {
+        let dir =
+            std::env::temp_dir().join(format!("hoa-backend-local-repos-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("CS101.mdx"), "# CS101").unwrap();
+        fs::write(dir.join("CS101.json"), "{}").unwrap();
+        fs::write(dir.join("ignore.txt"), "x").unwrap();
 
-        let result = load_repos_list(&temp_dir).unwrap();
-        assert!(result.is_empty());
+        let ids = load_local_repo_ids(&dir).unwrap();
 
-        let _ = std::fs::remove_dir_all(&temp_dir);
+        assert_eq!(ids, HashSet::from(["CS101".to_string()]));
+        fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]
-    fn test_load_repos_list_with_content() {
-        use std::env;
-        let temp_dir = env::temp_dir().join("test_repos_list_with_content");
-        let _ = std::fs::create_dir_all(&temp_dir);
-        let repos_file = temp_dir.join("repos_list.txt");
+    fn rejects_a_missing_local_repositories_directory() {
+        let dir =
+            std::env::temp_dir().join(format!("hoa-backend-missing-repos-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
 
-        let mut file = fs::File::create(&repos_file).unwrap();
-        writeln!(file, "MATH101").unwrap();
-        writeln!(file, "PHYS201").unwrap();
-        writeln!(file, "  CHEM301  ").unwrap(); // with whitespace
-        writeln!(file, "").unwrap(); // empty line
-        writeln!(file, "CS401").unwrap();
+        let error = load_local_repo_ids(&dir).unwrap_err();
 
-        let result = load_repos_list(&temp_dir).unwrap();
-
-        assert_eq!(result.len(), 4);
-        assert!(result.contains("MATH101"));
-        assert!(result.contains("PHYS201"));
-        assert!(result.contains("CHEM301"));
-        assert!(result.contains("CS401"));
-
-        let _ = std::fs::remove_dir_all(&temp_dir);
+        assert!(matches!(error, FumaError::MissingDirectory(path) if path == dir));
     }
 
     #[test]

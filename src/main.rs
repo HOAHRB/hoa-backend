@@ -17,12 +17,14 @@ use error::Result;
 use std::path::Path;
 use std::{env, fs};
 
+const COURSE_ORG: &str = "HOAHRB-Courses";
+
 /// Main entry point for the Fuma course page generator.
 ///
 /// This program:
 /// 1. (Optional) Fetches repos data from GitHub
 /// 2. Loads all training plans from TOML files (avoiding N+1 queries)
-/// 3. Filters courses based on repos_list.txt
+/// 3. Determines available course repositories from GitHub or local MDX files
 /// 4. Generates course pages with YAML frontmatter, formatting source
 ///    READMEs in memory for Fumadocs compatibility
 /// 5. Builds file trees from worktree.json data
@@ -72,67 +74,37 @@ async fn main() -> Result<()> {
 
     println!("Repository root: {}", repo_root.display());
 
-    // Fetch repos from GitHub if --fetch flag is provided
-    if should_fetch {
+    let repos_set = if should_fetch {
         println!("\n=== Fetching repos from GitHub ===");
 
-        let token = fetcher::resolve_github_token();
-        if token.is_none() {
+        let token = fetcher::resolve_github_token().unwrap_or_else(|| {
             eprintln!("Error: No GitHub token found!");
             eprintln!(
                 "Please set PERSONAL_ACCESS_TOKEN, GITHUB_TOKEN, or login via `gh auth login`"
             );
             std::process::exit(1);
-        }
+        });
+        let github = fetcher::GitHubFetcher::new(token.clone())?;
+        let repo_names = github.list_course_repositories(COURSE_ORG).await?;
 
-        // Load repos list
-        let repos_list_path = repo_root.join("repos_list.txt");
-        if !repos_list_path.exists() {
-            eprintln!("Error: repos_list.txt not found!");
-            std::process::exit(1);
-        }
-
-        let repos_content = fs::read_to_string(&repos_list_path)?;
-        let repos_list: Vec<String> = repos_content
-            .lines()
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
-            .collect();
-
-        println!("Found {} repositories in repos_list.txt", repos_list.len());
+        println!("Discovered {} course repositories", repo_names.len());
 
         // Fetch repos (20 concurrent requests)
-        fetcher::fetch_all_repos(
-            token.unwrap(),
-            "HITSZ-OpenAuto",
-            &repos_list,
-            &repos_dir,
-            20,
-        )
-        .await?;
+        fetcher::fetch_all_repos(token, COURSE_ORG, &repo_names, &repos_dir, 20).await?;
 
         println!("✓ Repository fetch completed\n");
-    }
-
-    // Check if repos directory exists
-    if !repos_dir.exists() {
-        eprintln!("\nError: 'repos' directory not found!");
-        eprintln!("This tool requires the repos directory to be populated first.");
-        eprintln!("Please run with --fetch flag or ensure repos have been fetched.");
-        eprintln!("\nExpected directory: {}", repos_dir.display());
-        std::process::exit(1);
-    }
-
-    // Load repos list (optional filter)
-    let repos_set = loader::load_repos_list(&repo_root)?;
-    if repos_set.is_empty() {
-        println!("No repos_list.txt found - will process all available courses");
+        repo_names.into_iter().collect()
     } else {
-        println!(
-            "Loaded {} repositories from repos_list.txt",
-            repos_set.len()
-        );
-    }
+        if !repos_dir.exists() {
+            eprintln!("\nError: 'repos' directory not found!");
+            eprintln!("This tool requires the repos directory to be populated first.");
+            eprintln!("Please run with --fetch flag or ensure repos have been fetched.");
+            eprintln!("\nExpected directory: {}", repos_dir.display());
+            std::process::exit(1);
+        }
+        loader::load_local_repo_ids(&repos_dir)?
+    };
+    println!("Loaded {} course repositories", repos_set.len());
 
     // Load all training plans from TOML files
     let data_dir = repo_root.join("hoa-major-data");

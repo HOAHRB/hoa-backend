@@ -28,7 +28,7 @@ cargo build --release
 调用方需在仓库根目录准备 `hoa-major-data/` 与 `repos/`。程序将生成结果写入 `content/docs/`；`--fetch` 可在生成前更新 `repos/` 中的课程资料。
 
 1. **加载培养方案**：从 `hoa-major-data/plans/*.toml` 读取所有培养方案
-2. **过滤课程**：根据 `repos_list.txt`（如果存在）过滤可用课程
+2. **确定课程仓库**：使用 `--fetch` 时从 `HOAHRB-Courses` 获取；否则从本地 `repos/*.mdx` 推导
 3. **读取资源**：从 `repos/` 目录读取课程的 `.mdx` 和 `.json` 文件
 4. **生成页面**：
    - 为每个课程生成 MDX 页面，包含 YAML frontmatter
@@ -52,19 +52,6 @@ content/docs/
 │       │   └── ...
 │       └── ...
 └── ...
-```
-
-## 配置文件
-
-### repos_list.txt（可选）
-
-位于项目根目录，每行一个课程代码，用于过滤需要处理的课程。如果文件不存在，将处理所有课程。
-
-示例：
-```
-COMP2001
-COMP2003
-MATH1001
 ```
 
 ## 依赖项

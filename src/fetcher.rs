@@ -225,14 +225,14 @@ impl GitHubFetcher {
 pub async fn fetch_all_repos(
     token: String,
     org: &str,
-    repos_list: &[String],
+    repo_names: &[String],
     repos_dir: &Path,
     concurrency: usize,
 ) -> Result<()> {
     use std::sync::Arc;
     use tokio::sync::Semaphore;
 
-    println!("Fetching {} repositories from GitHub...", repos_list.len());
+    println!("Fetching {} repositories from GitHub...", repo_names.len());
 
     // Create repos directory if not exists
     if !repos_dir.exists() {
@@ -243,7 +243,7 @@ pub async fn fetch_all_repos(
     let semaphore = Arc::new(Semaphore::new(concurrency));
 
     // Create tasks for all repos
-    let tasks: Vec<_> = repos_list
+    let tasks: Vec<_> = repo_names
         .iter()
         .map(|repo| {
             let fetcher = Arc::clone(&fetcher);
