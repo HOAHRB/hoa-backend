@@ -20,7 +20,7 @@ fn generate_download_url(repo: &str, path: &str) -> String {
         .collect();
     let encoded_path = parts.join("/");
     format!(
-        "https://gh.hoa.moe/github.com/HITSZ-OpenAuto/{}/raw/main/{}",
+        "https://gh.hoa.moe/github.com/HOAHRB-Courses/{}/raw/main/{}",
         repo, encoded_path
     )
 }
@@ -292,7 +292,7 @@ mod tests {
         let url = generate_download_url("TEST101", "slides/lecture1.pdf");
         assert_eq!(
             url,
-            "https://gh.hoa.moe/github.com/HITSZ-OpenAuto/TEST101/raw/main/slides/lecture1.pdf"
+            "https://gh.hoa.moe/github.com/HOAHRB-Courses/TEST101/raw/main/slides/lecture1.pdf"
         );
     }
 
