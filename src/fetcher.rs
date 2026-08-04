@@ -17,9 +17,17 @@ struct GitHubContent {
     encoding: String,
 }
 
+#[derive(Debug, Deserialize)]
+struct GitHubRepository {
+    name: String,
+    archived: bool,
+    is_template: bool,
+}
+
 /// GitHub API client for fetching repository data
 pub struct GitHubFetcher {
     client: reqwest::Client,
+    api_base: String,
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -31,6 +39,10 @@ struct RepoFetchStatus {
 impl GitHubFetcher {
     /// Create a new GitHub fetcher with authentication token
     pub fn new(token: String) -> Result<Self> {
+        Self::with_api_base(token, "https://api.github.com".to_string())
+    }
+
+    fn with_api_base(token: String, api_base: String) -> Result<Self> {
         let mut headers = HeaderMap::new();
         headers.insert(USER_AGENT, HeaderValue::from_static("fuma-rs"));
         headers.insert(
@@ -51,7 +63,55 @@ impl GitHubFetcher {
             .build()
             .map_err(|e| FumaError::Io(std::io::Error::other(e)))?;
 
-        Ok(Self { client })
+        Ok(Self {
+            client,
+            api_base: api_base.trim_end_matches('/').to_string(),
+        })
+    }
+
+    pub async fn list_course_repositories(&self, org: &str) -> Result<Vec<String>> {
+        let mut page = 1_u32;
+        let mut names = Vec::new();
+
+        loop {
+            let response = self
+                .client
+                .get(format!("{}/orgs/{}/repos", self.api_base, org))
+                .query(&[
+                    ("type", "all".to_string()),
+                    ("per_page", "100".to_string()),
+                    ("page", page.to_string()),
+                ])
+                .send()
+                .await
+                .map_err(|error| FumaError::Io(std::io::Error::other(error)))?;
+
+            if !response.status().is_success() {
+                return Err(FumaError::Io(std::io::Error::other(format!(
+                    "GitHub repository discovery returned {} on page {}",
+                    response.status(),
+                    page
+                ))));
+            }
+
+            let batch: Vec<GitHubRepository> = response
+                .json()
+                .await
+                .map_err(|error| FumaError::Io(std::io::Error::other(error)))?;
+            let batch_len = batch.len();
+            names.extend(batch.into_iter().filter_map(|repo| {
+                (!repo.name.starts_with('.') && !repo.archived && !repo.is_template)
+                    .then_some(repo.name)
+            }));
+
+            if batch_len < 100 {
+                break;
+            }
+            page += 1;
+        }
+
+        names.sort();
+        Ok(names)
     }
 
     /// Fetch a file from GitHub repository
@@ -270,4 +330,102 @@ pub fn resolve_github_token() -> Option<String> {
                 None
             }
         })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::{json, Value};
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::net::TcpListener;
+
+    async fn start_server(responses: Vec<(u16, Value)>) -> String {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+
+        tokio::spawn(async move {
+            for (status, body) in responses {
+                let (mut stream, _) = listener.accept().await.unwrap();
+                let mut request = vec![0; 4096];
+                let _ = stream.read(&mut request).await.unwrap();
+                let body = body.to_string();
+                let reason = if status == 200 {
+                    "OK"
+                } else {
+                    "Internal Server Error"
+                };
+                let response = format!(
+                    "HTTP/1.1 {status} {reason}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    body.len()
+                );
+                stream.write_all(response.as_bytes()).await.unwrap();
+            }
+        });
+
+        format!("http://{address}")
+    }
+
+    fn repository(name: String) -> Value {
+        json!({"name": name, "archived": false, "is_template": false})
+    }
+
+    #[tokio::test]
+    async fn lists_only_course_repositories() {
+        let api_base = start_server(vec![(
+            200,
+            json!([
+                repository("CS101".into()),
+                {"name": ".github", "archived": false, "is_template": false},
+                {"name": "OLD101", "archived": true, "is_template": false},
+                {"name": "course-template", "archived": false, "is_template": true}
+            ]),
+        )])
+        .await;
+        let fetcher = GitHubFetcher::with_api_base("token".into(), api_base).unwrap();
+
+        let repos = fetcher
+            .list_course_repositories("HOAHRB-Courses")
+            .await
+            .unwrap();
+
+        assert_eq!(repos, vec!["CS101"]);
+    }
+
+    #[tokio::test]
+    async fn paginates_full_repository_pages() {
+        let first_page = (0..100)
+            .map(|index| repository(format!("COURSE{index:03}")))
+            .collect::<Vec<_>>();
+        let api_base = start_server(vec![
+            (200, Value::Array(first_page)),
+            (200, json!([repository("LAST101".into())])),
+        ])
+        .await;
+        let fetcher = GitHubFetcher::with_api_base("token".into(), api_base).unwrap();
+
+        let repos = fetcher
+            .list_course_repositories("HOAHRB-Courses")
+            .await
+            .unwrap();
+
+        assert_eq!(repos.len(), 101);
+        assert!(repos.contains(&"LAST101".to_string()));
+    }
+
+    #[tokio::test]
+    async fn fails_when_a_later_repository_page_fails() {
+        let first_page = (0..100)
+            .map(|index| repository(format!("COURSE{index:03}")))
+            .collect::<Vec<_>>();
+        let api_base = start_server(vec![
+            (200, Value::Array(first_page)),
+            (500, json!({"message": "failure"})),
+        ])
+        .await;
+        let fetcher = GitHubFetcher::with_api_base("token".into(), api_base).unwrap();
+
+        let result = fetcher.list_course_repositories("HOAHRB-Courses").await;
+
+        assert!(result.is_err());
+    }
 }
