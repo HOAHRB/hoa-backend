@@ -5,7 +5,7 @@
 //! upfront, we avoid the N+1 query problem that plagued the Python implementation.
 
 use crate::error::{FumaError, Result};
-use crate::models::{Course, GradeDetail, Plan, SharedCategory, TomlPlan};
+use crate::models::{Course, CourseIntroduction, GradeDetail, Plan, SharedCategory, TomlPlan};
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -28,6 +28,7 @@ struct TomlSharedCategory {
 
 /// Grades summary data structure mapping repository IDs to grade details per plan variant
 pub type GradesSummary = HashMap<String, HashMap<String, Vec<GradeDetail>>>;
+pub type CourseIntroductions = HashMap<String, HashMap<String, CourseIntroduction>>;
 /// Lookup table mapping course code to repo ID with optional plan-specific overrides
 type LookupTable = HashMap<String, HashMap<String, String>>;
 
@@ -45,6 +46,14 @@ pub fn load_grades_summary(data_dir: &Path) -> GradesSummary {
         Ok(content) => serde_json::from_str(&content).unwrap_or_else(|_| HashMap::new()),
         Err(_) => HashMap::new(),
     }
+}
+
+pub fn load_course_introductions(data_dir: &Path) -> Result<CourseIntroductions> {
+    let path = data_dir.join("course_introductions.json");
+    if !path.exists() {
+        return Ok(HashMap::new());
+    }
+    Ok(serde_json::from_str(&fs::read_to_string(path)?)?)
 }
 
 /// Load lookup_table.toml if present.
@@ -154,6 +163,7 @@ pub fn load_all_plans(data_dir: &Path) -> Result<Vec<Plan>> {
 
     // Load grades summary once for all plans
     let grades_summary = load_grades_summary(data_dir);
+    let course_introductions = load_course_introductions(data_dir)?;
     // Load course_code -> repo_id lookup table once for all plans
     let lookup_table = load_lookup_table(data_dir);
 
@@ -172,6 +182,11 @@ pub fn load_all_plans(data_dir: &Path) -> Result<Vec<Plan>> {
             .courses
             .into_iter()
             .map(|c| {
+                let introduction = course_introductions
+                    .get(&c.course_code)
+                    .and_then(|variants| variants.get("default"))
+                    .cloned()
+                    .unwrap_or_default();
                 let repo_id =
                     resolve_repo_id(&lookup_table, &c.course_code, &toml_plan.info.plan_id);
 
@@ -195,7 +210,9 @@ pub fn load_all_plans(data_dir: &Path) -> Result<Vec<Plan>> {
                     course_nature: c.course_nature,
                     recommended_semester: c.recommended_year_semester,
                     hours: c.hours,
+                    total_hours: c.total_hours,
                     grade_details,
+                    introduction,
                 }
             })
             .collect();
@@ -553,6 +570,36 @@ mod tests {
         assert!(result.is_empty());
 
         let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn load_course_introductions_accepts_bilingual_and_empty_text() {
+        let temp_dir = std::env::temp_dir().join("test_course_introductions_valid");
+        let _ = fs::remove_dir_all(&temp_dir);
+        fs::create_dir_all(&temp_dir).unwrap();
+        fs::write(
+            temp_dir.join("course_introductions.json"),
+            r#"{"C001":{"default":{"zh":"中文简介","en":"English"}},"C002":{"default":{"zh":"","en":""}}}"#,
+        )
+        .unwrap();
+
+        let result = load_course_introductions(&temp_dir).unwrap();
+
+        assert_eq!(result["C001"]["default"].zh, "中文简介");
+        assert_eq!(result["C001"]["default"].en, "English");
+        assert_eq!(result["C002"]["default"].zh, "");
+        fs::remove_dir_all(temp_dir).unwrap();
+    }
+
+    #[test]
+    fn load_course_introductions_rejects_present_invalid_json() {
+        let temp_dir = std::env::temp_dir().join("test_course_introductions_invalid");
+        let _ = fs::remove_dir_all(&temp_dir);
+        fs::create_dir_all(&temp_dir).unwrap();
+        fs::write(temp_dir.join("course_introductions.json"), "not json").unwrap();
+
+        assert!(load_course_introductions(&temp_dir).is_err());
+        fs::remove_dir_all(temp_dir).unwrap();
     }
 
     #[test]

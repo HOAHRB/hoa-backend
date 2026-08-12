@@ -2,6 +2,19 @@ on: [push, pull_request]
 name: build
 
 jobs:
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+      - name: Run tests
+        run: cargo test --all-targets
+
   build:
     name: build
     runs-on: ${{ matrix.os }}

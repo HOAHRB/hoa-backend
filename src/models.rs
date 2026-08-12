@@ -24,6 +24,7 @@ pub struct TomlCourse {
     pub course_nature: Option<String>,
     pub recommended_year_semester: Option<String>,
     pub hours: Option<HourDistribution>,
+    pub total_hours: Option<u32>,
     pub grade_details: Option<Vec<GradeDetail>>,
 }
 
@@ -31,6 +32,14 @@ pub struct TomlCourse {
 pub struct GradeDetail {
     pub name: String,
     pub percent: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
+pub struct CourseIntroduction {
+    #[serde(default)]
+    pub zh: String,
+    #[serde(default)]
+    pub en: String,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -67,7 +76,9 @@ pub struct Course {
     pub course_nature: Option<String>,
     pub recommended_semester: Option<String>,
     pub hours: Option<HourDistribution>,
+    pub total_hours: Option<u32>,
     pub grade_details: Option<Vec<GradeDetail>>,
+    pub introduction: CourseIntroduction,
 }
 
 #[derive(Debug, Deserialize)]
@@ -109,7 +120,9 @@ pub struct CourseMetadata {
     pub assessment_method: String,
     pub course_nature: String,
     pub hour_distribution: HourDistributionMeta,
+    pub total_hours: u32,
     pub grading_scheme: Vec<GradingItem>,
+    pub introduction: CourseIntroduction,
 }
 
 #[derive(Debug, Serialize)]
@@ -163,6 +176,7 @@ mod tests {
                     computer: 0,
                     tutoring: 0,
                 },
+                total_hours: 48,
                 grading_scheme: vec![
                     GradingItem {
                         name: "Final Exam".to_string(),
@@ -173,6 +187,7 @@ mod tests {
                         percent: 30,
                     },
                 ],
+                introduction: CourseIntroduction::default(),
             },
         };
 
@@ -185,6 +200,7 @@ mod tests {
         assert!(yaml.contains("credit: 3"));
         assert!(yaml.contains("assessmentMethod: Exam"));
         assert!(yaml.contains("courseNature: Required"));
+        assert!(yaml.contains("totalHours: 48"));
     }
 
     #[test]
@@ -204,6 +220,7 @@ mod tests {
                     computer: 0,
                     tutoring: 0,
                 },
+                total_hours: 48,
                 grading_scheme: vec![
                     GradingItem {
                         name: "Midterm".to_string(),
@@ -218,6 +235,7 @@ mod tests {
                         percent: 20,
                     },
                 ],
+                introduction: CourseIntroduction::default(),
             },
         };
 
@@ -249,7 +267,9 @@ mod tests {
                     computer: 0,
                     tutoring: 0,
                 },
+                total_hours: 24,
                 grading_scheme: vec![],
+                introduction: CourseIntroduction::default(),
             },
         };
 
@@ -257,6 +277,39 @@ mod tests {
 
         assert!(yaml.contains("title: Simple Course"));
         assert!(yaml.contains("gradingScheme: []"));
+    }
+
+    #[test]
+    fn test_frontmatter_serializes_bilingual_introduction() {
+        let frontmatter = Frontmatter {
+            title: "Introduced Course".to_string(),
+            description: String::new(),
+            course: CourseMetadata {
+                credit: 1.0,
+                assessment_method: "考查".to_string(),
+                course_nature: "必修".to_string(),
+                hour_distribution: HourDistributionMeta {
+                    theory: 0,
+                    lab: 0,
+                    practice: 0,
+                    exercise: 0,
+                    computer: 0,
+                    tutoring: 0,
+                },
+                total_hours: 16,
+                grading_scheme: vec![],
+                introduction: CourseIntroduction {
+                    zh: "中文简介".to_string(),
+                    en: "English introduction".to_string(),
+                },
+            },
+        };
+
+        let yaml = frontmatter.to_yaml();
+
+        assert!(yaml.contains("totalHours: 16"));
+        assert!(yaml.contains("zh: 中文简介"));
+        assert!(yaml.contains("en: English introduction"));
     }
 
     #[test]
@@ -276,7 +329,9 @@ mod tests {
                     computer: 8,
                     tutoring: 2,
                 },
+                total_hours: 70,
                 grading_scheme: vec![],
+                introduction: CourseIntroduction::default(),
             },
         };
 
