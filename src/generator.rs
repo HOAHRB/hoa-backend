@@ -1,8 +1,8 @@
 use crate::constants::{get_semester_title_by_folder, parse_semester_folders, SEMESTER_MAPPING};
 use crate::error::Result;
 use crate::models::{
-    Course, CourseMetadata, Frontmatter, GradeDetail, GradingItem, HourDistributionMeta, Plan,
-    SharedCategory, WorktreeData,
+    Course, CourseIntroduction, CourseMetadata, Frontmatter, GradeDetail, GradingItem,
+    HourDistributionMeta, Plan, SharedCategory, WorktreeData,
 };
 use crate::tree::{build_file_tree, tree_to_jsx};
 use std::collections::{HashMap, HashSet};
@@ -79,7 +79,9 @@ fn build_frontmatter(title: &str, course: &Course) -> String {
             assessment_method,
             course_nature,
             hour_distribution,
+            total_hours: course.total_hours.unwrap_or(0),
             grading_scheme,
+            introduction: course.introduction.clone(),
         },
     };
 
@@ -117,7 +119,9 @@ fn minimal_course(repo_id: &str, name: &str, grade_details: Option<Vec<GradeDeta
         course_nature: None,
         recommended_semester: None,
         hours: None,
+        total_hours: None,
         grade_details,
+        introduction: CourseIntroduction::default(),
     }
 }
 
@@ -146,6 +150,7 @@ fn build_course_page_content(
 
     if use_course_info {
         sections.push("<CourseInfo />".to_string());
+        sections.push("<CourseIntroduction />".to_string());
     }
 
     let body = format!("{}{}", content, filetree_content);
@@ -494,7 +499,10 @@ mod tests {
     fn test_build_course_page_content_omits_empty_body() {
         let page = build_course_page_content("---\ntitle: Test\n---", "", "", true);
 
-        assert_eq!(page, "---\ntitle: Test\n---\n\n<CourseInfo />");
+        assert_eq!(
+            page,
+            "---\ntitle: Test\n---\n\n<CourseInfo />\n\n<CourseIntroduction />"
+        );
     }
 
     #[test]
@@ -586,7 +594,12 @@ mod tests {
                 course_nature: Some("必修".to_string()),
                 recommended_semester: Some("第一学年秋季".to_string()),
                 hours: None,
+                total_hours: Some(32),
                 grade_details: None,
+                introduction: CourseIntroduction {
+                    zh: "中文简介".to_string(),
+                    en: "English introduction".to_string(),
+                },
             }],
         }];
 

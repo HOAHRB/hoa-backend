@@ -64,3 +64,10 @@ content/docs/
 - `walkdir`: 目录遍历
 - `urlencoding`: URL 编码
 - `chrono`: 时间戳格式化
+# Course metadata inputs
+
+In addition to `plans/`, the generator reads `course_introductions.json` from the
+`hoa-major-data` directory. Entries are keyed by the original teaching-system
+course code and use a `default` object containing string `zh` and `en` fields.
+The file may be absent for backward compatibility; a present malformed file is
+an error. Existing plan `total_hours` values are emitted as `course.totalHours`.
