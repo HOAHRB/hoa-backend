@@ -4,6 +4,7 @@
 //! Rust implementation that avoids the N+1 query problem by loading all data upfront.
 
 mod constants;
+mod course_navigation;
 mod error;
 mod fetcher;
 mod formatter;
@@ -147,6 +148,11 @@ async fn main() -> Result<()> {
         "Course pages generated successfully in {:.2?}",
         gen_start.elapsed()
     );
+
+    course_navigation::write_course_navigation(
+        &plans,
+        &repo_root.join("lib/data/course_navigation.json"),
+    )?;
 
     println!("\n✓ Done! All pages generated and formatted.");
 
