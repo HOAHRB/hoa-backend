@@ -22,6 +22,8 @@ pub struct TomlCourse {
     pub credit: Option<f64>,
     pub assessment_method: Option<String>,
     pub course_nature: Option<String>,
+    pub course_category: Option<String>,
+    pub offering_college: Option<String>,
     pub recommended_year_semester: Option<String>,
     pub hours: Option<HourDistribution>,
     pub total_hours: Option<u32>,
@@ -74,6 +76,8 @@ pub struct Course {
     pub credit: Option<f64>,
     pub assessment_method: Option<String>,
     pub course_nature: Option<String>,
+    pub course_category: Option<String>,
+    pub offering_college: Option<String>,
     pub recommended_semester: Option<String>,
     pub hours: Option<HourDistribution>,
     pub total_hours: Option<u32>,
@@ -119,6 +123,10 @@ pub struct CourseMetadata {
     pub credit: f64,
     pub assessment_method: String,
     pub course_nature: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub course_category: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub offering_college: Option<String>,
     pub hour_distribution: HourDistributionMeta,
     pub total_hours: u32,
     pub grading_scheme: Vec<GradingItem>,
@@ -160,6 +168,24 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_course_optional_category_and_college_from_toml() {
+        let legacy = "course_code = 'CS101'\ncourse_name = '程序设计'\n";
+        let course: TomlCourse = toml::from_str(legacy).unwrap();
+        assert!(course.course_category.is_none());
+        assert!(course.offering_college.is_none());
+
+        let enriched = format!(
+            "{legacy}course_category = '专业课'\noffering_college = '计算机科学与技术学院'\n"
+        );
+        let course: TomlCourse = toml::from_str(&enriched).unwrap();
+        assert_eq!(course.course_category.as_deref(), Some("专业课"));
+        assert_eq!(
+            course.offering_college.as_deref(),
+            Some("计算机科学与技术学院")
+        );
+    }
+
+    #[test]
     fn test_frontmatter_to_yaml_basic() {
         let frontmatter = Frontmatter {
             title: "Test Course".to_string(),
@@ -168,6 +194,8 @@ mod tests {
                 credit: 3.0,
                 assessment_method: "Exam".to_string(),
                 course_nature: "Required".to_string(),
+                course_category: None,
+                offering_college: None,
                 hour_distribution: HourDistributionMeta {
                     theory: 48,
                     lab: 0,
@@ -200,6 +228,8 @@ mod tests {
         assert!(yaml.contains("credit: 3"));
         assert!(yaml.contains("assessmentMethod: Exam"));
         assert!(yaml.contains("courseNature: Required"));
+        assert!(!yaml.contains("courseCategory:"));
+        assert!(!yaml.contains("offeringCollege:"));
         assert!(yaml.contains("totalHours: 48"));
     }
 
@@ -212,6 +242,8 @@ mod tests {
                 credit: 4.0,
                 assessment_method: "Mixed".to_string(),
                 course_nature: "Elective".to_string(),
+                course_category: None,
+                offering_college: None,
                 hour_distribution: HourDistributionMeta {
                     theory: 32,
                     lab: 16,
@@ -259,6 +291,8 @@ mod tests {
                 credit: 2.0,
                 assessment_method: "Pass/Fail".to_string(),
                 course_nature: "Optional".to_string(),
+                course_category: None,
+                offering_college: None,
                 hour_distribution: HourDistributionMeta {
                     theory: 24,
                     lab: 0,
@@ -288,6 +322,8 @@ mod tests {
                 credit: 1.0,
                 assessment_method: "考查".to_string(),
                 course_nature: "必修".to_string(),
+                course_category: None,
+                offering_college: None,
                 hour_distribution: HourDistributionMeta {
                     theory: 0,
                     lab: 0,
@@ -321,6 +357,8 @@ mod tests {
                 credit: 5.0,
                 assessment_method: "Comprehensive".to_string(),
                 course_nature: "Core".to_string(),
+                course_category: None,
+                offering_college: None,
                 hour_distribution: HourDistributionMeta {
                     theory: 32,
                     lab: 16,
