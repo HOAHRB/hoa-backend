@@ -318,6 +318,8 @@ mod tests {
                 credit: None,
                 assessment_method: assessment.map(str::to_owned),
                 course_nature: None,
+                course_category: None,
+                offering_college: None,
                 recommended_semester: Some(term.into()),
                 hours: None,
                 total_hours: None,

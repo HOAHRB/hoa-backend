@@ -71,3 +71,6 @@ In addition to `plans/`, the generator reads `course_introductions.json` from th
 course code and use a `default` object containing string `zh` and `en` fields.
 The file may be absent for backward compatibility; a present malformed file is
 an error. Existing plan `total_hours` values are emitted as `course.totalHours`.
+Optional plan course fields `course_category` and `offering_college` are emitted
+as `course.courseCategory` and `course.offeringCollege`. Missing values are
+omitted, preserving compatibility with older plans.

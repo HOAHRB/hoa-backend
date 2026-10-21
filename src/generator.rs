@@ -78,6 +78,8 @@ fn build_frontmatter(title: &str, course: &Course) -> String {
             credit,
             assessment_method,
             course_nature,
+            course_category: course.course_category.clone(),
+            offering_college: course.offering_college.clone(),
             hour_distribution,
             total_hours: course.total_hours.unwrap_or(0),
             grading_scheme,
@@ -117,6 +119,8 @@ fn minimal_course(repo_id: &str, name: &str, grade_details: Option<Vec<GradeDeta
         credit: None,
         assessment_method: None,
         course_nature: None,
+        course_category: None,
+        offering_college: None,
         recommended_semester: None,
         hours: None,
         total_hours: None,
@@ -592,6 +596,8 @@ mod tests {
                 credit: Some(2.0),
                 assessment_method: Some("考查".to_string()),
                 course_nature: Some("必修".to_string()),
+                course_category: Some("专业课".to_string()),
+                offering_college: Some("计算机科学与技术学院".to_string()),
                 recommended_semester: Some("第一学年秋季".to_string()),
                 hours: None,
                 total_hours: Some(32),
@@ -638,6 +644,8 @@ mod tests {
         let index_content = fs::read_to_string(semester_index).unwrap();
 
         assert!(page_content.contains("wiki.hoa.moe/contribution-guide/course-mapping"));
+        assert!(page_content.contains("courseCategory: 专业课"));
+        assert!(page_content.contains("offeringCollege: 计算机科学与技术学院"));
         assert!(index_content.contains("Missing Course"));
 
         let _ = fs::remove_dir_all(repo_root);

@@ -208,6 +208,8 @@ pub fn load_all_plans(data_dir: &Path) -> Result<Vec<Plan>> {
                     credit: c.credit,
                     assessment_method: c.assessment_method,
                     course_nature: c.course_nature,
+                    course_category: c.course_category,
+                    offering_college: c.offering_college,
                     recommended_semester: c.recommended_year_semester,
                     hours: c.hours,
                     total_hours: c.total_hours,
