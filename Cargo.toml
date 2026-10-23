@@ -1,6 +1,6 @@
 [package]
 name = "hoa-backend"
-version = "2026.10.21"
+version = "2026.10.23"
 edition = "2021"
 
 [[bin]]
