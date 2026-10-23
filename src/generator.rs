@@ -139,8 +139,7 @@ fn readme_body_content(readme_content: &str) -> String {
 
 fn missing_repo_notice(repo_id: &str) -> String {
     format!(
-        "当前培养方案中包含这门课程，但 HOA 暂未收录对应的 GitHub 仓库（`{repo_id}`）/建立相关的映射。\
-\n\n如果你希望补充这门课程的资料，请前往 [HOA Wiki](https://wiki.hoa.moe/contribution-guide/course-mapping) 查看如何建立映射或者联系管理员添加仓库。"
+        "<div className=\"max-w-prose\">\n\n这门课程（`{repo_id}`）还留着一些空白，等上过这门课的你添上几笔。\n\n可以是教材与参考书、授课内容和课程建议，也可以是你希望当初有人告诉自己的事。\n\n[参与与反馈](/about#参与与反馈)\n\n</div>"
     )
 }
 
@@ -492,11 +491,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_missing_repo_notice_contains_mapping_guide() {
+    fn test_missing_repo_notice_preserves_id_and_participation_link() {
         let content = missing_repo_notice("MISSING101");
 
         assert!(content.contains("MISSING101"));
-        assert!(content.contains("wiki.hoa.moe/contribution-guide/course-mapping"));
+        assert!(content.contains("`MISSING101`"));
+        assert!(content.contains("[参与与反馈](/about#参与与反馈)"));
+        assert!(!content.contains("## 课程资料"));
+        assert!(!content.contains("wiki.hoa.moe"));
     }
 
     #[test]
