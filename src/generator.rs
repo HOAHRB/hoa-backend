@@ -645,7 +645,7 @@ mod tests {
         let page_content = fs::read_to_string(course_page).unwrap();
         let index_content = fs::read_to_string(semester_index).unwrap();
 
-        assert!(page_content.contains("wiki.hoa.moe/contribution-guide/course-mapping"));
+        assert!(page_content.contains("[参与与反馈](/about#参与与反馈)"));
         assert!(page_content.contains("courseCategory: 专业课"));
         assert!(page_content.contains("offeringCollege: 计算机科学与技术学院"));
         assert!(index_content.contains("Missing Course"));
