@@ -235,7 +235,7 @@ pub fn build_course_navigation(plans: &[Plan]) -> CourseNavigationArtifact {
                 };
                 let href = format!(
                     "/docs/{}/{}/{}/{}",
-                    plan.year, plan.major_code, folder, course.repo_id
+                    plan.year, plan.major_code, folder, course.code
                 );
                 let assessment_method = course
                     .assessment_method
@@ -246,7 +246,7 @@ pub fn build_course_navigation(plans: &[Plan]) -> CourseNavigationArtifact {
                 by_href.insert(
                     href.clone(),
                     (
-                        course.repo_id.to_uppercase(),
+                        course.code.to_uppercase(),
                         Record {
                             entry_year: plan.year.clone(),
                             major_id: plan.major_code.clone(),
@@ -313,6 +313,7 @@ mod tests {
             major_code: major.into(),
             major_name: name.into(),
             courses: vec![Course {
+                code: "CS101".into(),
                 repo_id: "CS101".into(),
                 name: "课程".into(),
                 credit: None,

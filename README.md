@@ -74,3 +74,11 @@ an error. Existing plan `total_hours` values are emitted as `course.totalHours`.
 Optional plan course fields `course_category` and `offering_college` are emitted
 as `course.courseCategory` and `course.offeringCollege`. Missing values are
 omitted, preserving compatibility with older plans.
+
+## 专业课程身份与资源映射
+
+专业课程文件名、学期卡片链接和课程导航均使用培养方案原始 `course_code`；`lookup_table.toml` 解析出的 `repo_id` 只选择正文和下载资源，并通过 frontmatter `course.repoId` 交给前端查询 GitHub 仓库与提交记录。共享分类页继续以仓库 ID 为路由。
+
+课程名称、学分、学时、考核方式等保留当前方案记录，教务简介按原始课号查询。专业课程成绩构成仅使用该课程 TOML 内的 `grade_details`，缺失或为空时输出空 `gradingScheme`，不再回退至 `grades_summary.json`。中央汇总仍保留仓库 ID 键语义，仅供共享分类页使用。
+
+这是相对上游 d6bffc0（路由使用仓库 ID）和 ae94efb（成绩汇总按仓库 ID 查询）的有意调整：复用资料仓库不代表教务课程身份或成绩构成相同。新内容需与支持 `course.repoId` 的前端一起部署，重新生成全部内容、课程导航和前端索引；旧映射路由不提供重定向。

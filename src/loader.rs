@@ -1,7 +1,7 @@
 //! Data loading utilities for training plans and course information.
 //!
 //! This module provides functions to load all training plan data from TOML files
-//! and enrich it with grade details from grades_summary.json. By loading all data
+//! and attach introductions by original course code. By loading all data
 //! upfront, we avoid the N+1 query problem that plagued the Python implementation.
 
 use crate::error::{FumaError, Result};
@@ -93,67 +93,7 @@ fn resolve_repo_id(lookup_table: &LookupTable, course_code: &str, plan_id: &str)
         .unwrap_or_else(|| course_code.to_string())
 }
 
-/// Select grade details for a course based on hierarchical matching rules.
-///
-/// Match priority order:
-/// 1. `{year}_{major_code}` or `{year}_{major_name}` (most specific)
-/// 2. `{year}_default` (year-specific default)
-/// 3. `default` (global default)
-///
-/// Returns None if no matching grade details are found.
-fn select_grade_details(
-    grades_summary: &GradesSummary,
-    repo_id: &str,
-    year: &str,
-    major_code: &str,
-    major_name: &str,
-) -> Option<Vec<GradeDetail>> {
-    let entry = grades_summary.get(repo_id)?;
-
-    // Try year_major keys (both code and name)
-    let year_major_keys = vec![
-        format!("{}_{}", year, major_code),
-        format!("{}_{}", year, major_name),
-    ];
-
-    for key in &year_major_keys {
-        if let Some(details) = entry.get(key) {
-            if !details.is_empty() {
-                return Some(details.clone());
-            }
-        }
-    }
-
-    // Try year_default
-    let year_default_key = format!("{}_default", year);
-    if let Some(details) = entry.get(&year_default_key) {
-        if !details.is_empty() {
-            return Some(details.clone());
-        }
-    }
-
-    // Try default
-    if let Some(details) = entry.get("default") {
-        if !details.is_empty() {
-            return Some(details.clone());
-        }
-    }
-
-    None
-}
-
-/// Load all training plans from TOML files with grade details enrichment.
-///
-/// This function loads all plan data in a single pass, avoiding the N+1 query problem
-/// that occurred in the Python implementation where each course required a separate
-/// CLI invocation to fetch grade details.
-///
-/// # Arguments
-/// * `data_dir` - Path to the hoa-majors data directory containing plans/ subdirectory
-///
-/// # Returns
-/// * `Ok(Vec<Plan>)` - All loaded and enriched training plans
-/// * `Err(FumaError)` - If the plans directory is missing or files can't be read
+/// Load plans with their own grade_details; repository mappings only select resources.
 pub fn load_all_plans(data_dir: &Path) -> Result<Vec<Plan>> {
     let plans_dir = data_dir.join("plans");
 
@@ -161,8 +101,6 @@ pub fn load_all_plans(data_dir: &Path) -> Result<Vec<Plan>> {
         return Err(FumaError::MissingDirectory(plans_dir));
     }
 
-    // Load grades summary once for all plans
-    let grades_summary = load_grades_summary(data_dir);
     let course_introductions = load_course_introductions(data_dir)?;
     // Load course_code -> repo_id lookup table once for all plans
     let lookup_table = load_lookup_table(data_dir);
@@ -177,7 +115,7 @@ pub fn load_all_plans(data_dir: &Path) -> Result<Vec<Plan>> {
         let content = fs::read_to_string(entry.path())?;
         let toml_plan: TomlPlan = toml::from_str(&content)?;
 
-        // Enrich courses with grade_details from grades_summary.json
+        // Preserve curriculum identity independently of shared resource repositories.
         let courses = toml_plan
             .courses
             .into_iter()
@@ -190,19 +128,8 @@ pub fn load_all_plans(data_dir: &Path) -> Result<Vec<Plan>> {
                 let repo_id =
                     resolve_repo_id(&lookup_table, &c.course_code, &toml_plan.info.plan_id);
 
-                // Select grade details if not already in TOML.
-                // NOTE: We look up grades_summary by repository ID, not by course_code.
-                let grade_details = c.grade_details.or_else(|| {
-                    select_grade_details(
-                        &grades_summary,
-                        &repo_id,
-                        &toml_plan.info.year,
-                        &toml_plan.info.major_code,
-                        &toml_plan.info.major_name,
-                    )
-                });
-
                 Course {
+                    code: c.course_code,
                     repo_id,
                     name: c.course_name,
                     credit: c.credit,
@@ -213,7 +140,7 @@ pub fn load_all_plans(data_dir: &Path) -> Result<Vec<Plan>> {
                     recommended_semester: c.recommended_year_semester,
                     hours: c.hours,
                     total_hours: c.total_hours,
-                    grade_details,
+                    grade_details: c.grade_details,
                     introduction,
                 }
             })
@@ -307,157 +234,6 @@ pub fn load_local_repo_ids(repos_dir: &Path) -> Result<HashSet<String>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn create_test_grade_detail(name: &str, percent: &str) -> GradeDetail {
-        GradeDetail {
-            name: name.to_string(),
-            percent: Some(percent.to_string()),
-        }
-    }
-
-    #[test]
-    fn test_select_grade_details_year_major_code() {
-        let mut grades_summary = HashMap::new();
-        let mut course_entry = HashMap::new();
-
-        course_entry.insert(
-            "2023_CS".to_string(),
-            vec![create_test_grade_detail("Exam", "70%")],
-        );
-        course_entry.insert(
-            "2023_default".to_string(),
-            vec![create_test_grade_detail("Exam", "60%")],
-        );
-        course_entry.insert(
-            "default".to_string(),
-            vec![create_test_grade_detail("Exam", "50%")],
-        );
-
-        grades_summary.insert("MATH101".to_string(), course_entry);
-
-        let result =
-            select_grade_details(&grades_summary, "MATH101", "2023", "CS", "Computer Science");
-
-        assert!(result.is_some());
-        let details = result.unwrap();
-        assert_eq!(details.len(), 1);
-        assert_eq!(details[0].name, "Exam");
-        assert_eq!(details[0].percent, Some("70%".to_string()));
-    }
-
-    #[test]
-    fn test_select_grade_details_year_major_name() {
-        let mut grades_summary = HashMap::new();
-        let mut course_entry = HashMap::new();
-
-        course_entry.insert(
-            "2023_Computer Science".to_string(),
-            vec![create_test_grade_detail("Project", "80%")],
-        );
-        course_entry.insert(
-            "default".to_string(),
-            vec![create_test_grade_detail("Exam", "50%")],
-        );
-
-        grades_summary.insert("PROG202".to_string(), course_entry);
-
-        let result =
-            select_grade_details(&grades_summary, "PROG202", "2023", "CS", "Computer Science");
-
-        assert!(result.is_some());
-        let details = result.unwrap();
-        assert_eq!(details.len(), 1);
-        assert_eq!(details[0].name, "Project");
-        assert_eq!(details[0].percent, Some("80%".to_string()));
-    }
-
-    #[test]
-    fn test_select_grade_details_year_default() {
-        let mut grades_summary = HashMap::new();
-        let mut course_entry = HashMap::new();
-
-        course_entry.insert(
-            "2023_default".to_string(),
-            vec![create_test_grade_detail("Midterm", "40%")],
-        );
-        course_entry.insert(
-            "default".to_string(),
-            vec![create_test_grade_detail("Exam", "50%")],
-        );
-
-        grades_summary.insert("PHYS101".to_string(), course_entry);
-
-        let result = select_grade_details(
-            &grades_summary,
-            "PHYS101",
-            "2023",
-            "EE",
-            "Electrical Engineering",
-        );
-
-        assert!(result.is_some());
-        let details = result.unwrap();
-        assert_eq!(details.len(), 1);
-        assert_eq!(details[0].name, "Midterm");
-    }
-
-    #[test]
-    fn test_select_grade_details_global_default() {
-        let mut grades_summary = HashMap::new();
-        let mut course_entry = HashMap::new();
-
-        course_entry.insert(
-            "default".to_string(),
-            vec![create_test_grade_detail("Final", "100%")],
-        );
-
-        grades_summary.insert("CHEM101".to_string(), course_entry);
-
-        let result = select_grade_details(
-            &grades_summary,
-            "CHEM101",
-            "2024",
-            "ME",
-            "Mechanical Engineering",
-        );
-
-        assert!(result.is_some());
-        let details = result.unwrap();
-        assert_eq!(details.len(), 1);
-        assert_eq!(details[0].name, "Final");
-    }
-
-    #[test]
-    fn test_select_grade_details_not_found() {
-        let grades_summary = HashMap::new();
-
-        let result =
-            select_grade_details(&grades_summary, "UNKNOWN", "2023", "CS", "Computer Science");
-
-        assert!(result.is_none());
-    }
-
-    #[test]
-    fn test_select_grade_details_empty_details() {
-        let mut grades_summary = HashMap::new();
-        let mut course_entry = HashMap::new();
-
-        course_entry.insert("2023_CS".to_string(), vec![]);
-        course_entry.insert(
-            "default".to_string(),
-            vec![create_test_grade_detail("Backup", "100%")],
-        );
-
-        grades_summary.insert("TEST101".to_string(), course_entry);
-
-        let result =
-            select_grade_details(&grades_summary, "TEST101", "2023", "CS", "Computer Science");
-
-        // Should fallback to default since 2023_CS is empty
-        assert!(result.is_some());
-        let details = result.unwrap();
-        assert_eq!(details[0].name, "Backup");
-    }
 
     #[test]
     fn test_resolve_repo_id_plan_specific() {

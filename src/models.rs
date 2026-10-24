@@ -71,6 +71,7 @@ pub struct SharedCategory {
 
 #[derive(Debug, Clone)]
 pub struct Course {
+    pub code: String,
     pub repo_id: String,
     pub name: String,
     pub credit: Option<f64>,
@@ -120,6 +121,7 @@ pub struct Frontmatter {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CourseMetadata {
+    pub repo_id: String,
     pub credit: f64,
     pub assessment_method: String,
     pub course_nature: String,
@@ -191,6 +193,7 @@ mod tests {
             title: "Test Course".to_string(),
             description: "A test description".to_string(),
             course: CourseMetadata {
+                repo_id: "CS101".to_string(),
                 credit: 3.0,
                 assessment_method: "Exam".to_string(),
                 course_nature: "Required".to_string(),
@@ -239,6 +242,7 @@ mod tests {
             title: "Advanced Math".to_string(),
             description: "".to_string(),
             course: CourseMetadata {
+                repo_id: "CS101".to_string(),
                 credit: 4.0,
                 assessment_method: "Mixed".to_string(),
                 course_nature: "Elective".to_string(),
@@ -288,6 +292,7 @@ mod tests {
             title: "Simple Course".to_string(),
             description: "No grading details".to_string(),
             course: CourseMetadata {
+                repo_id: "CS101".to_string(),
                 credit: 2.0,
                 assessment_method: "Pass/Fail".to_string(),
                 course_nature: "Optional".to_string(),
@@ -319,6 +324,7 @@ mod tests {
             title: "Introduced Course".to_string(),
             description: String::new(),
             course: CourseMetadata {
+                repo_id: "CS101".to_string(),
                 credit: 1.0,
                 assessment_method: "考查".to_string(),
                 course_nature: "必修".to_string(),
@@ -354,6 +360,7 @@ mod tests {
             title: "Complex Course".to_string(),
             description: "".to_string(),
             course: CourseMetadata {
+                repo_id: "CS101".to_string(),
                 credit: 5.0,
                 assessment_method: "Comprehensive".to_string(),
                 course_nature: "Core".to_string(),

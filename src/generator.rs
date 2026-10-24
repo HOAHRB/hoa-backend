@@ -75,6 +75,7 @@ fn build_frontmatter(title: &str, course: &Course) -> String {
         title: title.to_string(),
         description: String::new(),
         course: CourseMetadata {
+            repo_id: course.repo_id.clone(),
             credit,
             assessment_method,
             course_nature,
@@ -114,6 +115,7 @@ fn title_from_mdx(mdx_content: &str, fallback: &str) -> String {
 
 fn minimal_course(repo_id: &str, name: &str, grade_details: Option<Vec<GradeDetail>>) -> Course {
     Course {
+        code: repo_id.to_string(),
         repo_id: repo_id.to_string(),
         name: name.to_string(),
         credit: None,
@@ -244,7 +246,7 @@ pub async fn generate_course_pages(
                         .entry(folder.to_string())
                         .or_default()
                         .push(SemesterCourseCard {
-                            slug: course.repo_id.clone(),
+                            slug: course.code.clone(),
                             name: course.name.clone(),
                             course_nature: course.course_nature.clone(),
                             assessment_method: course.assessment_method.clone(),
@@ -274,7 +276,7 @@ pub async fn generate_course_pages(
 
                 (content, filetree_content)
             } else {
-                (missing_repo_notice(&course.repo_id), String::new())
+                (missing_repo_notice(&course.code), String::new())
             };
 
             // Build frontmatter
@@ -285,7 +287,7 @@ pub async fn generate_course_pages(
                 build_course_page_content(&frontmatter, &content, &filetree_content, true);
             for target_dir in target_dirs {
                 fs::write(
-                    target_dir.join(format!("{}.mdx", course.repo_id)),
+                    target_dir.join(format!("{}.mdx", course.code)),
                     &page_content,
                 )?;
             }
@@ -490,6 +492,158 @@ pub async fn generate_course_pages(
 mod tests {
     use super::*;
 
+    #[tokio::test]
+    async fn mapped_courses_keep_separate_routes_metadata_and_plan_grades() {
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("hoa-mapping-{unique}"));
+        let data = root.join("data");
+        let repos = root.join("repos");
+        let docs = root.join("docs");
+        fs::create_dir_all(data.join("plans")).unwrap();
+        fs::create_dir_all(&repos).unwrap();
+        fs::write(
+            data.join("plans/plan.toml"),
+            r#"
+[info]
+year = "2025"
+major_code = "CS"
+major_name = "Computer Science"
+plan_ID = "PLAN"
+
+[[courses]]
+course_code = "ORIGINAL"
+course_name = "Original Course"
+credit = 2.0
+total_hours = 32
+recommended_year_semester = "第一学年秋季,第一学年春季"
+grade_details = [{name = "Plan Exam", percent = "70%"}]
+
+[[courses]]
+course_code = "ALIAS"
+course_name = "Another Course"
+credit = 4.0
+recommended_year_semester = "第一学年秋季"
+
+[[courses]]
+course_code = "EMPTY"
+course_name = "Explicitly Empty Grades"
+recommended_year_semester = "第一学年秋季"
+grade_details = []
+"#,
+        )
+        .unwrap();
+        fs::write(
+            data.join("lookup_table.toml"),
+            r#"
+[ORIGINAL]
+PLAN = "RESOURCE"
+DEFAULT = "WRONG"
+[ALIAS]
+DEFAULT = "RESOURCE"
+[EMPTY]
+default = "RESOURCE"
+"#,
+        )
+        .unwrap();
+        fs::write(
+            data.join("course_introductions.json"),
+            r#"{
+            "ORIGINAL": {"default": {"zh": "Original introduction", "en": ""}},
+            "RESOURCE": {"default": {"zh": "Wrong introduction", "en": ""}}
+        }"#,
+        )
+        .unwrap();
+        fs::write(
+            data.join("grades_summary.json"),
+            r#"{
+            "RESOURCE": {"default": [{"name": "Repository Exam", "percent": "100%"}]},
+            "ALIAS": {"default": [{"name": "Code Exam", "percent": "100%"}]}
+        }"#,
+        )
+        .unwrap();
+        fs::write(
+            repos.join("RESOURCE.mdx"),
+            "# RESOURCE - Resource Title\n\nShared resource body",
+        )
+        .unwrap();
+        fs::write(
+            repos.join("RESOURCE.json"),
+            r#"{"notes/test.pdf":{"size":10}}"#,
+        )
+        .unwrap();
+        let plans = crate::loader::load_all_plans(&data).unwrap();
+        assert_eq!(plans[0].courses[0].code, "ORIGINAL");
+        assert_eq!(plans[0].courses[0].repo_id, "RESOURCE");
+        assert!(plans[0].courses[1].grade_details.is_none());
+        assert!(plans[0].courses[2]
+            .grade_details
+            .as_ref()
+            .unwrap()
+            .is_empty());
+        generate_course_pages(
+            &plans,
+            &[],
+            &HashSet::new(),
+            &crate::loader::load_grades_summary(&data),
+            &repos,
+            &docs,
+            &HashSet::new(),
+        )
+        .await
+        .unwrap();
+        let term = docs.join("2025/CS/fresh-autumn");
+        for (code, title, credit) in [
+            ("ORIGINAL", "Original Course", 2.0),
+            ("ALIAS", "Another Course", 4.0),
+        ] {
+            let page = fs::read_to_string(term.join(format!("{code}.mdx"))).unwrap();
+            let yaml: serde_yaml::Value =
+                serde_yaml::from_str(page.split("---").nth(1).unwrap()).unwrap();
+            assert_eq!(yaml["title"].as_str(), Some(title));
+            assert_eq!(yaml["course"]["repoId"].as_str(), Some("RESOURCE"));
+            assert_eq!(yaml["course"]["credit"].as_f64(), Some(credit));
+            assert!(page.contains("Shared resource body"));
+            assert!(page.contains("https://open.osa.moe/openauto/RESOURCE"));
+            assert!(page.contains("HOAHRB-Courses/RESOURCE/raw/main/notes/test.pdf"));
+            assert!(!page.contains("Repository Exam"));
+            assert!(!page.contains("Code Exam"));
+            assert!(!page.contains("Wrong introduction"));
+            if code == "ORIGINAL" {
+                assert!(page.contains("Plan Exam"));
+                assert!(page.contains("Original introduction"));
+            } else {
+                assert!(yaml["course"]["gradingScheme"]
+                    .as_sequence()
+                    .unwrap()
+                    .is_empty());
+            }
+        }
+        assert!(!term.join("RESOURCE.mdx").exists());
+        assert!(docs.join("2025/CS/fresh-spring/ORIGINAL.mdx").exists());
+        let index = fs::read_to_string(term.join("index.mdx")).unwrap();
+        assert!(index.contains("/fresh-autumn/ORIGINAL"));
+        assert!(index.contains("/fresh-autumn/ALIAS"));
+        assert!(!index.contains("/fresh-autumn/RESOURCE"));
+        let nav = crate::course_navigation::build_course_navigation(&plans);
+        let nav = serde_json::to_value(nav).unwrap();
+        assert!(nav["courses"].get("RESOURCE").is_none());
+        assert_eq!(
+            nav["courses"]["ORIGINAL"]["records"]
+                .as_array()
+                .unwrap()
+                .len(),
+            2
+        );
+        assert_eq!(
+            nav["courses"]["ALIAS"]["records"][0]["href"],
+            "/docs/2025/CS/fresh-autumn/ALIAS"
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
     #[test]
     fn test_missing_repo_notice_preserves_id_and_participation_link() {
         let content = missing_repo_notice("MISSING101");
@@ -593,6 +747,7 @@ mod tests {
             major_code: "CS".to_string(),
             major_name: "Computer Science".to_string(),
             courses: vec![Course {
+                code: "MISSING101".to_string(),
                 repo_id: "MISSING101".to_string(),
                 name: "Missing Course".to_string(),
                 credit: Some(2.0),
