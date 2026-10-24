@@ -139,7 +139,7 @@ fn readme_body_content(readme_content: &str) -> String {
 
 fn missing_repo_notice(repo_id: &str) -> String {
     format!(
-        "这门课程（`{repo_id}`）还留着一些空白，等上过这门课的你添上几笔。\n\n可以是教材与参考书、授课内容和课程建议，也可以是你希望当初有人告诉自己的事。\n\n[参与与反馈](/about#参与与反馈)"
+        "这门课程（`{repo_id}`）还留着一些空白，等上过这门课的你添上几笔。\n\n[参与与反馈](/about#参与与反馈)\n\n可以是教材与参考书、授课内容和课程建议，也可以是你希望当初有人告诉自己的事。"
     )
 }
 
