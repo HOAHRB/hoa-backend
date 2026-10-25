@@ -91,7 +91,7 @@ fn build_frontmatter(title: &str, course: &Course) -> String {
     frontmatter.to_yaml()
 }
 
-fn title_from_mdx(mdx_content: &str, fallback: &str) -> String {
+pub(crate) fn title_from_mdx(mdx_content: &str, fallback: &str) -> String {
     let lines: Vec<&str> = mdx_content.lines().collect();
     for line in lines.iter().take(5) {
         let trimmed = line.trim();

@@ -5,6 +5,7 @@
 
 mod constants;
 mod course_navigation;
+mod course_relations;
 mod error;
 mod fetcher;
 mod formatter;
@@ -110,6 +111,7 @@ async fn main() -> Result<()> {
     // Load all training plans from TOML files
     let data_dir = repo_root.join("hoa-major-data");
     let plans = loader::load_all_plans(&data_dir)?;
+    let relations = course_relations::load(&data_dir.join("course_relations.toml"), &repos_dir)?;
     println!("Loaded {} training plans", plans.len());
 
     let shared_categories_config = loader::load_shared_categories(&data_dir);
@@ -152,6 +154,11 @@ async fn main() -> Result<()> {
     course_navigation::write_course_navigation(
         &plans,
         &repo_root.join("lib/data/course_navigation.json"),
+    )?;
+
+    course_relations::write(
+        &relations,
+        &repo_root.join("lib/data/course_relations.json"),
     )?;
 
     println!("\n✓ Done! All pages generated and formatted.");

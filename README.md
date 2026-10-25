@@ -38,6 +38,10 @@ cargo build --release
 
 ## 输出结构
 
+可选的 `hoa-major-data/course_relations.toml` 使用 `groups`、`series` 两张表，条目包含 `name` 和宏课程仓库 ID 的 `members` 列表。系列按成员排列表示单链顺序；每个群或系列至少两个不同成员，不允许重复。关系 ID 使用大驼峰，格式错误会中止生成，文件缺失则生成空关系。
+
+生成的 `lib/data/course_relations.json` 仅包含关系和所引用仓库的展示名称，不含各专业开设记录。名称复用课程文档标题解析规则；缺失文档时报告警告并回退到仓库 ID。前端负责在构建时拆分关系索引及本方案入口。
+
 ```
 content/docs/
 ├── 2022/
