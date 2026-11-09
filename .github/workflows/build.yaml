@@ -28,7 +28,8 @@ jobs:
             target: x86_64-unknown-linux-musl
             archive-name: hoa-backend-linux.tar.gz
           - build: macos
-            os: macos-latest
+            # Cross-compile ARM64 on Intel to avoid hosted ARM runner shortages.
+            os: macos-15-intel
             rust: nightly
             target: aarch64-apple-darwin
             archive-name: hoa-backend-macos-arm64.tar.gz
@@ -67,6 +68,12 @@ jobs:
           pwd
           ls -al
           strip "target/${{ matrix.target }}/release/hoa-backend"
+
+      - name: Verify macOS binary architecture
+        if: matrix.build == 'macos'
+        run: |
+          file "target/${{ matrix.target }}/release/hoa-backend"
+          lipo -verify_arch arm64 "target/${{ matrix.target }}/release/hoa-backend"
 
       - name: Build archive
         shell: bash
