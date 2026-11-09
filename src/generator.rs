@@ -266,10 +266,7 @@ pub async fn generate_course_pages(
                     let worktree: WorktreeData = serde_json::from_str(&json_content)?;
                     let tree = build_file_tree(&worktree, &course.repo_id);
                     let jsx = tree_to_jsx(&tree, 1);
-                    format!(
-                        "\n\n## 资源下载\n\n<Files url=\"https://open.osa.moe/openauto/{}\">\n{}\n</Files>",
-                        course.repo_id, jsx
-                    )
+                    format!("\n\n## 资源下载\n\n<Files>\n{}\n</Files>", jsx)
                 } else {
                     String::new()
                 };
@@ -361,10 +358,7 @@ pub async fn generate_course_pages(
                     let worktree: WorktreeData = serde_json::from_str(&json_content)?;
                     let tree = build_file_tree(&worktree, repo_id);
                     let jsx = tree_to_jsx(&tree, 1);
-                    format!(
-                        "\n\n## 资源下载\n\n<Files url=\"https://open.osa.moe/openauto/{}\">\n{}\n</Files>",
-                        repo_id, jsx
-                    )
+                    format!("\n\n## 资源下载\n\n<Files>\n{}\n</Files>", jsx)
                 } else {
                     String::new()
                 };
@@ -606,8 +600,11 @@ default = "RESOURCE"
             assert_eq!(yaml["course"]["repoId"].as_str(), Some("RESOURCE"));
             assert_eq!(yaml["course"]["credit"].as_f64(), Some(credit));
             assert!(page.contains("Shared resource body"));
-            assert!(page.contains("https://open.osa.moe/openauto/RESOURCE"));
-            assert!(page.contains("HOAHRB-Courses/RESOURCE/raw/main/notes/test.pdf"));
+            assert!(page.contains("<Files>"));
+            assert!(!page.contains("open.osa.moe"));
+            assert!(page.contains(
+                "https://raw.githubusercontent.com/HOAHRB-Courses/RESOURCE/main/notes/test.pdf"
+            ));
             assert!(!page.contains("Repository Exam"));
             assert!(!page.contains("Code Exam"));
             assert!(!page.contains("Wrong introduction"));

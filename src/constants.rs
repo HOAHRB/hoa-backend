@@ -60,7 +60,15 @@ pub fn parse_semester_folders(recommended: &str) -> Vec<(&'static str, &'static 
 }
 
 /// Files to exclude from the file tree
-pub const EXCLUDED_PATTERNS: &[&str] = &[".gitkeep", "README.md", "LICENSE", "tag.txt"];
+pub const EXCLUDED_PATTERNS: &[&str] = &[
+    ".gitkeep",
+    ".gitignore",
+    ".gitattributes",
+    ".gitmodules",
+    "README.md",
+    "LICENSE",
+    "tag.txt",
+];
 
 /// File extensions to exclude
 pub const EXCLUDED_EXTENSIONS: &[&str] = &[".toml"];
@@ -169,6 +177,10 @@ mod tests {
         assert!(!should_include_file("tag.txt"));
         assert!(!should_include_file("folder/.gitkeep"));
         assert!(!should_include_file("docs/README.md"));
+        assert!(!should_include_file(".gitignore"));
+        assert!(!should_include_file("assignments/.gitignore"));
+        assert!(!should_include_file(".gitattributes"));
+        assert!(!should_include_file(".gitmodules"));
     }
 
     #[test]
