@@ -73,7 +73,7 @@ jobs:
         if: matrix.build == 'macos'
         run: |
           file "target/${{ matrix.target }}/release/hoa-backend"
-          lipo -verify_arch arm64 "target/${{ matrix.target }}/release/hoa-backend"
+          lipo "target/${{ matrix.target }}/release/hoa-backend" -verify_arch arm64
 
       - name: Build archive
         shell: bash
